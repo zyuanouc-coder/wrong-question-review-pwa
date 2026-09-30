@@ -1,0 +1,5 @@
+{
+  "name":"拾题 · 错题复习","short_name":"拾题","id":"./","lang":"zh-CN","start_url":"./?source=pwa","scope":"./","display":"standalone","background_color":"#f5f5ee","theme_color":"#254d42",
+  "description":"七科错题整理、解析与间隔复习。",
+  "icons":[{"src":"./icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},{"src":"./icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]
+}

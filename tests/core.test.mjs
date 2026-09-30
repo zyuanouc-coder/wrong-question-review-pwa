@@ -1,0 +1,80 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {SUBJECTS,DAY,INTERVALS,freshData,parseBank,mergeBank,assess,schedule,recordReview,queueFor,validateBackup,escapeHTML} from '../js/core.mjs';
+import {Store,STORAGE_KEY} from '../js/store.mjs';
+const bank=parseBank(await readFile(new URL('../data/example-bank.json',import.meta.url),'utf8'));
+const initial=()=>mergeBank(freshData(),bank).data;
+const now=new Date('2026-09-30T12:00:00+08:00').getTime();
+test('七科与明确的示例库，正式库为空',async()=>{
+  assert.equal(SUBJECTS.length,7);assert.ok(SUBJECTS.includes('公基'));
+  assert.equal(bank.questions.length,3);assert.ok(bank.questions.every(q=>q.isDemo));
+  assert.equal(parseBank(await readFile(new URL('../data/question-bank.json',import.meta.url),'utf8')).questions.length,0);
+});
+test('导入严格验证，错误文件不会部分修改已有题库',()=>{
+  for(const changes of [{subject:'未知'},{answer:['H']},{explanation:''},{id:'__proto__'},{options:{A:'仅一个'}}]){
+    assert.throws(()=>parseBank({...bank,questions:[{...bank.questions[0],...changes}]}));
+  }
+  assert.throws(()=>parseBank({...bank,questions:[bank.questions[0],bank.questions[0]]}),/重复/);
+  assert.throws(()=>parseBank({questions:[]}),/question-bank/);
+  assert.equal(freshData().questions.length,0);
+});
+test('单选、多选和问答的判定边界',()=>{
+  const q=bank.questions[0];assert.equal(assess(q,['B']),true);assert.equal(assess(q,[]),false);assert.equal(assess(q,['A']),false);
+  const multi={...q,type:'多选题',answer:['A','C']};assert.equal(assess(multi,['C','A']),true);assert.equal(assess(multi,['A']),false);assert.equal(assess(multi,['A','B','C']),false);
+  assert.equal(assess(bank.questions[2],'口述'),null);
+});
+test('复习间隔从1天逐级到120天，忘记重置，模糊缩短',()=>{
+  let p;
+  for(const days of INTERVALS){p=schedule(p,'good',now);assert.equal(p.due,now+days*DAY);}
+  assert.equal(schedule(p,'good',now).due,now+120*DAY);
+  const wrong=schedule(p,'again',now);assert.equal(wrong.stage,-1);assert.equal(wrong.due,now+600000);assert.equal(wrong.lapses,1);
+  assert.equal(schedule(wrong,'good',now).due,now+DAY);
+  assert.equal(schedule(null,'easy',now).due,now+3*DAY);
+  assert.equal(schedule(p,'hard',now).due,now+DAY);
+});
+test('答错不能作为答对推进，计时保留，复习记录写入',()=>{
+  const d=initial(),q=d.questions[0];assert.throws(()=>recordReview(d,q.id,['A'],'good',3,now),/答错/);
+  const wrong=recordReview(d,q.id,['A'],'again',8,now);assert.equal(wrong.progress[q.id].lastWrongAnswer,'A');assert.equal(wrong.reviews[0].seconds,8);assert.equal(wrong.reviews[0].correct,false);assert.equal(wrong.questions[0].myWrongAnswer,'A');
+  assert.equal(d.reviews.length,0);
+  assert.throws(()=>recordReview(d,q.id,['B'],'good',NaN,now));
+});
+test('到期优先、新题日限额、未到期排除、待核对排除、错题慢题筛选',()=>{
+  let d=initial();d.settings.dailyNew=1;
+  assert.equal(queueFor(d,'new','','',now).length,1);
+  d=recordReview(d,d.questions[0].id,['A'],'again',90,now);
+  assert.equal(queueFor(d,'due','','',now).length,0);
+  assert.deepEqual(queueFor(d,'due','','',now+600000),[d.questions[0].id]);
+  assert.deepEqual(queueFor(d,'wrong','','',now),[d.questions[0].id]);
+  assert.deepEqual(queueFor(d,'slow','','',now),[d.questions[0].id]);
+  d.questions[0].verification='pending';assert.equal(queueFor(d,'all','判断推理','',now).length,0);
+  d.settings.dailyNew=0;assert.equal(queueFor(d,'new','','',now+DAY).length,0);
+});
+test('反复导入幂等，异编号重复跳过，冲突答案阻止导入',()=>{
+  const d=initial();assert.equal(mergeBank(d,bank).data.questions.length,3);
+  const duplicate={...bank.questions[0],id:'other-id'};
+  assert.equal(mergeBank(d,{questions:[duplicate]}).counts.duplicates,1);
+  assert.throws(()=>mergeBank(d,{questions:[{...duplicate,answer:['A']}]}),/冲突/);
+  assert.equal(d.questions[0].answer[0],'B');
+});
+test('内容改正后提前复习但保留历史和私人笔记；解析更新不重置进度',()=>{
+  let d=initial();const q=d.questions[0];d=recordReview(d,q.id,['B'],'good',4,now);d.notes[q.id]='我的个人错因';
+  const explain=mergeBank(d,{questions:[{...q,explanation:'新的详细解析'}]},now+1000).data;
+  assert.equal(explain.progress[q.id].due,now+DAY);assert.equal(explain.notes[q.id],'我的个人错因');
+  assert.equal(mergeBank(d,{questions:[{...q,myWrongAnswer:''}]}).data.questions[0].myWrongAnswer,'A');
+  const fixed=mergeBank(explain,{questions:[{...q,answer:['C']}]},now+2000).data;
+  assert.equal(fixed.progress[q.id].stage,-1);assert.equal(fixed.progress[q.id].due,now+2000);assert.equal(fixed.reviews.length,1);assert.equal(fixed.notes[q.id],'我的个人错因');
+});
+test('完整备份恢复往返，损坏备份拒绝',()=>{
+  let d=initial();d=recordReview(d,d.questions[0].id,['B'],'easy',7,now);d.notes[d.questions[0].id]='容易混淆';
+  const restored=validateBackup({kind:'review-backup',version:1,data:d});assert.deepEqual(restored,d);
+  assert.throws(()=>validateBackup({...d}),/备份/);
+  const broken=structuredClone(d);broken.progress[d.questions[0].id].due='bad';assert.throws(()=>validateBackup({kind:'review-backup',version:1,data:broken}),/进度/);
+});
+test('存储失败不丢失现有内存进度，多个标签页不静默覆盖',()=>{
+  const values=new Map();const storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)};
+  const a=new Store(storage),b=new Store(storage);a.save(initial());assert.throws(()=>b.save(freshData()),/其他页面/);
+  const loaded=new Store(storage);assert.equal(loaded.data.questions.length,3);
+  const old=loaded.data;storage.setItem=()=>{throw new Error('quota');};assert.throws(()=>loaded.save({...old,questions:[]}),/quota/);assert.equal(loaded.data,old);assert.ok(values.get(STORAGE_KEY));
+});
+test('不把题库文本当HTML执行',()=>assert.equal(escapeHTML('<img onerror="bad">'), '&lt;img onerror=&quot;bad&quot;&gt;'));

@@ -1,0 +1,8 @@
+{
+  "kind": "question-bank", "version": 1, "title": "自编示例 · 体验复习流程",
+  "questions": [
+    {"id":"demo-logic-001","subject":"判断推理","category":"充分条件","type":"单选题","question":"【自编示例】已知：如果小林通过笔试，那么小林会进入面试。下列哪项一定成立？","options":{"A":"小林进入面试，所以一定通过笔试","B":"小林没有进入面试，所以没有通过笔试","C":"小林没有通过笔试，所以不会进入面试","D":"小林一定会进入面试"},"answer":["B"],"explanation":"设通过笔试为 P，进入面试为 Q。P→Q 的等价逆否命题是 ¬Q→¬P，所以 B 成立。肯定后件或否定前件不能得到必然结论；条件命题也没有断定 P 或 Q 实际发生。","keyPoints":["充分条件：肯前必肯后，否后必否前。","进入面试可能还有其他途径，不能反推。"],"myWrongAnswer":"A","wrongReason":"把充分条件误当成了必要条件。","source":"自编演示题，非用户错题","verification":"verified","isDemo":true},
+    {"id":"demo-math-001","subject":"数量关系","category":"百分比","type":"单选题","question":"【自编示例】某商品先涨价 20%，再按涨价后的价格降价 20%。现价是原价的多少？","options":{"A":"100%","B":"104%","C":"96%","D":"80%"},"answer":["C"],"explanation":"设原价为 100 元，涨价后为 120 元，随后降价 20% 得 120×0.8＝96 元。两个百分比的基数不同，不能直接相减。","keyPoints":["连续变化用乘法：1.2×0.8＝0.96。"],"myWrongAnswer":"A","wrongReason":"忽略了第二次变化的基数。","source":"自编演示题，非用户错题","verification":"verified","isDemo":true},
+    {"id":"demo-public-001","subject":"公基","category":"复习方法","type":"问答题","question":"【功能演示】间隔复习时，遇到答错或完全想不起来的题，应如何处理？","answer":"先核对答案与解析，找出错因；标记“不会 / 答错”，缩短复习间隔，稍后再次主动回忆。","explanation":"这是一张用于体验问答卡的功能演示卡，并非公基考试知识。问答卡由你对照答案自行判断掌握程度；选择题则会自动判分。","keyPoints":["先主动回忆，再看答案。"],"source":"自编演示卡，非考试题","verification":"verified","isDemo":true}
+  ]
+}

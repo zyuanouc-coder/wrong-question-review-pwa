@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+*.log
+task_plan.md
+findings.md
+progress.md
+test-results/
+private-input/

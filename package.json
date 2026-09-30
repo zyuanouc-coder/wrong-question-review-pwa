@@ -1,0 +1,11 @@
+{
+  "name": "wrong-question-review-pwa",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/core.test.mjs tests/static.test.mjs",
+    "check": "node --check js/app.mjs && node --check js/core.mjs && node --check js/store.mjs && node --check sw.js && npm test",
+    "preview": "python3 -m http.server 4180 --bind 127.0.0.1"
+  }
+}

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#254d42"><meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="description" content="七科错题整理、答案解析和间隔复习，离线保存你的学习进度。">
+  <title>拾题 · 错题复习</title><link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css?v=1.0.0">
+</head>
+<body>
+  <header class="topbar"><a href="./" class="brand" aria-label="拾题首页"><span class="brand-icon">拾</span><span><strong>拾题</strong><small>把错过的，变成记住的。</small></span></a><span id="connection" class="badge">本机保存</span></header>
+  <main id="app"><p class="loading">正在打开错题本…</p></main>
+  <nav class="nav" aria-label="主导航"><button data-page="today">◷<span>今日</span></button><button data-page="bank">▤<span>题库</span></button><button data-page="stats">▥<span>统计</span></button><button data-page="settings">⚙<span>设置</span></button></nav>
+  <div id="toast" role="status" aria-live="polite"></div><dialog id="dialog"></dialog>
+  <input id="import-file" type="file" accept=".json,application/json" hidden><input id="restore-file" type="file" accept=".json,application/json" hidden>
+  <noscript>请启用 JavaScript 后使用此应用。</noscript><script type="module" src="./js/app.mjs?v=1.0.0"></script>
+</body>
+</html>
