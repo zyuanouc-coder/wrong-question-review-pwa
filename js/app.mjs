@@ -1,11 +1,11 @@
-import {SUBJECTS,RATINGS,INTERVALS,DAY,escapeHTML as e,dayKey,parseBank,mergeBank,assess,schedule,recordReview,queueFor,validateBackup,normalizeSettings,syncPublishedBank} from './core.mjs?v=1.0.1';
-import {Store} from './store.mjs?v=1.0.1';
+import {SUBJECTS,RATINGS,INTERVALS,DAY,escapeHTML as e,dayKey,parseBank,mergeBank,assess,schedule,recordReview,queueFor,validateBackup,normalizeSettings,syncPublishedBank} from './core.mjs?v=1.0.2';
+import {Store} from './store.mjs?v=1.0.2';
 const app=document.querySelector('#app'),dialog=document.querySelector('#dialog');
 let store;
 try{store=new Store();}catch(error){app.innerHTML=`<section class="panel"><h1>本机数据暂时无法读取</h1><p>原有数据未被删除。请保留当前浏览器数据后再排查。</p><p>${e(error.message)}</p></section>`;throw error;}
 let page='today',subject='',category='',search='',bankFilter='all',queue=[],index=0,revealed=false,selection=[],typed='',responseSeconds=0,startedAt=0,pausedAt=0,completed=0,sessionCorrect=0,reviewToken=null;
 let toastTimer;
-let syncBusy=false,pendingBank=null,lastSyncAttempt=0;
+let syncBusy=false,syncNotify=false,pendingBank=null,lastSyncAttempt=0;
 const $=selector=>app.querySelector(selector);
 const date=time=>new Date(time).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
 const percentage=(n,total)=>total?`${Math.round(n/total*100)}%`:'—';
@@ -58,7 +58,7 @@ function chart(points){const max=Math.max(1,...points.map(p=>p.value)),w=640,h=1
 function renderStats(){const d=store.data,reviews=d.reviews,now=new Date();const points=Array.from({length:14},(_,i)=>{const t=new Date(now);t.setDate(t.getDate()-13+i);const key=dayKey(t);return{label:key,value:reviews.filter(r=>dayKey(r.time)===key).length};});const activeDays=new Set(reviews.map(r=>dayKey(r.time)));let streak=0;const cursor=new Date(now);if(!activeDays.has(dayKey(cursor)))cursor.setDate(cursor.getDate()-1);while(activeDays.has(dayKey(cursor))){streak++;cursor.setDate(cursor.getDate()-1);}
   app.innerHTML=`<header class="page-head"><div class="eyebrow">让进步有迹可循</div><h1>复习记录</h1><p>选择题自动判分；问答题按自评记录。</p></header><div class="metrics stats-metrics">${metric(reviews.length,'累计复习次数')}${metric(percentage(reviews.filter(r=>r.correct).length,reviews.length),'累计正确率')}${metric(streak,'连续复习天数')}${metric(Object.values(d.progress).filter(p=>p.stage>=4).length,'进入30天及以上间隔')}</div><section class="panel"><h2>最近 14 天 · 复习次数</h2>${chart(points)}<details><summary>查看每日数据</summary>${points.map(p=>`<div class="history-row"><span>${p.label}</span><b>${p.value} 次</b></div>`).join('')}</details></section><section class="panel"><h2>各科表现</h2><div class="subject-stats">${SUBJECTS.map(s=>{const rs=reviews.filter(r=>r.subject===s);return `<div class="history-row"><strong>${s}</strong><span>${rs.length} 次 · ${percentage(rs.filter(r=>r.correct).length,rs.length)}</span></div>`;}).join('')}</div></section><section class="panel"><h2>未来 7 天 · 已安排复习</h2><p class="hint">包含当前已到期题，不含未来新题带来的复习。</p>${Array.from({length:7},(_,i)=>{const t=new Date(now);t.setDate(t.getDate()+i);const key=dayKey(t);const count=d.questions.filter(q=>q.verification==='verified'&&d.progress[q.id]&&(i===0?dayKey(d.progress[q.id].due)<=key:dayKey(d.progress[q.id].due)===key)).length;return `<div class="history-row"><span>${i===0?'今天及已逾期':key}</span><b>${count} 题</b></div>`;}).join('')}</section>`;
 }
-function renderSettings(){const s=store.data.settings;app.innerHTML=`<header class="page-head"><div class="eyebrow">按自己的节奏</div><h1>设置与备份</h1></header><section class="panel"><h2>每天的分量</h2><form id="settings-form"><label>每日新题上限<input name="dailyNew" type="number" min="0" max="200" value="${s.dailyNew}" required></label><label>每组题数<input name="groupSize" type="number" min="1" max="100" value="${s.groupSize}" required></label><label>慢题阈值（秒）<input name="slowSeconds" type="number" min="5" max="600" value="${s.slowSeconds}" required></label><button class="primary" type="submit">保存设置</button></form></section><section class="panel"><h2>复习间隔</h2><p>不会 / 答错：10 分钟后重现；模糊：1 天后。</p><p>答对：按 ${INTERVALS.join(' → ')} 天逐级推进。熟练：提前一级。答错后从短间隔重新开始。</p><p class="hint">这是固定间隔复习规则，日期依据你的设备时间。应用打开时显示到期队列，不发送后台提醒。</p></section><section class="panel"><h2>自动题库更新</h2><p>打开或刷新应用、回到前台、重新联网时，自动检查已发布的题库。正在答题或编辑时会等你结束后再合并。</p><p>${store.data.publishedBank?`当前已合并第 ${store.data.publishedBank.revision} 批 · ${date(store.data.publishedBank.appliedAt)}`:"还没有发布真实错题，等待第一批材料。"}题库页也可以手动检查更新。</p></section><section class="panel"><h2>我的数据</h2><p>应用会自动下载本站发布的题库。手机作答记录、复习进度和个人笔记仍保存在本机，不会上传。手动导入的文件也只保存在当前浏览器。</p><div class="button-stack"><button id="export" class="primary">导出完整备份</button><button id="export-bank" class="secondary">只导出题库</button><button id="restore" class="secondary">从备份恢复</button><button data-import class="secondary">导入新题库</button><a class="secondary button-link" href="./data/example-bank.json" download="example-bank.json">下载题库格式示例</a></div><p class="hint">完整备份含题库和复习记录。恢复会替换当前设备的数据，确认前可先导出。</p></section><section class="panel"><h2>安装到手机</h2><p>iPhone：用 Safari 打开本站，点“分享”→“添加到主屏幕”。首次联网打开并完成离线缓存后即可离线复习。</p><p id="cache-status" class="hint">${offlineReady?'离线资源已就绪。':'正在准备离线资源，首次使用请保持联网。'}</p><p class="hint">版本 1.0.1 · 拾题</p></section>`;
+function renderSettings(){const s=store.data.settings;app.innerHTML=`<header class="page-head"><div class="eyebrow">按自己的节奏</div><h1>设置与备份</h1></header><section class="panel"><h2>每天的分量</h2><form id="settings-form"><label>每日新题上限<input name="dailyNew" type="number" min="0" max="200" value="${s.dailyNew}" required></label><label>每组题数<input name="groupSize" type="number" min="1" max="100" value="${s.groupSize}" required></label><label>慢题阈值（秒）<input name="slowSeconds" type="number" min="5" max="600" value="${s.slowSeconds}" required></label><button class="primary" type="submit">保存设置</button></form></section><section class="panel"><h2>复习间隔</h2><p>不会 / 答错：10 分钟后重现；模糊：1 天后。</p><p>答对：按 ${INTERVALS.join(' → ')} 天逐级推进。熟练：提前一级。答错后从短间隔重新开始。</p><p class="hint">这是固定间隔复习规则，日期依据你的设备时间。应用打开时显示到期队列，不发送后台提醒。</p></section><section class="panel"><h2>自动题库更新</h2><p>打开或刷新应用、回到前台、重新联网时，自动检查已发布的题库。正在答题或编辑时会等你结束后再合并。</p><p>${store.data.publishedBank?`当前已合并第 ${store.data.publishedBank.revision} 批 · ${date(store.data.publishedBank.appliedAt)}`:"还没有发布真实错题，等待第一批材料。"}题库页也可以手动检查更新。</p></section><section class="panel"><h2>我的数据</h2><p>应用会自动下载本站发布的题库。手机作答记录、复习进度和个人笔记仍保存在本机，不会上传。手动导入的文件也只保存在当前浏览器。</p><div class="button-stack"><button id="export" class="primary">导出完整备份</button><button id="export-bank" class="secondary">只导出题库</button><button id="restore" class="secondary">从备份恢复</button><button data-import class="secondary">导入新题库</button><a class="secondary button-link" href="./data/example-bank.json" download="example-bank.json">下载题库格式示例</a></div><p class="hint">完整备份含题库和复习记录。恢复会替换当前设备的数据，确认前可先导出。</p></section><section class="panel"><h2>安装到手机</h2><p>iPhone：用 Safari 打开本站，点“分享”→“添加到主屏幕”。首次联网打开并完成离线缓存后即可离线复习。</p><p id="cache-status" class="hint">${offlineReady?'离线资源已就绪。':'正在准备离线资源，首次使用请保持联网。'}</p><p class="hint">版本 1.0.2 · 拾题</p></section>`;
   $('#settings-form').addEventListener('submit',event=>{event.preventDefault();const values=Object.fromEntries(new FormData(event.target));const next={...store.data,settings:normalizeSettings(values)};if(save(next))toast('设置已保存');});$('#export').addEventListener('click',()=>download(`拾题完整备份-${dayKey()}.json`,store.backup()));$('#export-bank').addEventListener('click',()=>download(`拾题题库-${dayKey()}.json`,JSON.stringify({kind:'question-bank',version:1,title:'我的错题库',questions:store.data.questions},null,2)));$('#restore').addEventListener('click',()=>document.querySelector('#restore-file').click());bindImport();
 }
 function download(name,text){const url=URL.createObjectURL(new Blob([text],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
@@ -86,7 +86,8 @@ function applyPublishedBank(manual=false){
 }
 async function checkPublishedBank(manual=false,force=false){
   if(!navigator.onLine){if(manual)toast('当前离线，继续使用已保存的题库。');return;}
-  if(syncBusy||(!manual&&!force&&Date.now()-lastSyncAttempt<30000))return;
+  if(syncBusy){if(manual){syncNotify=true;toast('正在检查题库更新…');}return;}
+  if(!manual&&!force&&Date.now()-lastSyncAttempt<30000)return;
   syncBusy=true;lastSyncAttempt=Date.now();
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
   try{
@@ -95,9 +96,9 @@ async function checkPublishedBank(manual=false,force=false){
     const bank=parseBank(await response.json());
     const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(bank)));
     const signature=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
-    pendingBank={bank,signature};applyPublishedBank(manual);
-  }catch(err){if(manual)toast('暂时无法检查更新，已保存的题库仍可使用。');}
-  finally{clearTimeout(timeout);syncBusy=false;}
+    pendingBank={bank,signature};applyPublishedBank(manual||syncNotify);
+  }catch(err){if(manual||syncNotify)toast('暂时无法检查更新，已保存的题库仍可使用。');}
+  finally{clearTimeout(timeout);syncBusy=false;syncNotify=false;}
 }
 window.addEventListener('storage',event=>{if(event.key==='wrong-question-review-v1'){toast('另一页面已更新数据，刷新后可继续操作。');}});
 let offlineReady=false;

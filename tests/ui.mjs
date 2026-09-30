@@ -43,7 +43,7 @@ try{
       await page.reload();await page.getByRole('heading',{name:'今天，捡回几个知识点。'}).waitFor();
       await page.evaluate(async()=>{await navigator.serviceWorker.ready;});
       await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
-      const keys=await page.evaluate(()=>caches.keys());assert.ok(keys.includes('wrong-question-review-shell-v1.0.1'));
+      const keys=await page.evaluate(()=>caches.keys());assert.ok(keys.includes('wrong-question-review-shell-v1.0.2'));
       await context.setOffline(true);await page.reload();await page.getByRole('heading',{name:'今天，捡回几个知识点。'}).waitFor();assert.equal((await data()).reviews.length,4);await page.locator('[data-start="wrong"]').click();await page.locator('[data-option="B"]').click();await page.locator('#reveal').click();await page.locator('[data-rating="good"]').click();assert.equal((await data()).reviews.length,5);await fit('离线结果');
       await page.locator('#done').click();await page.locator('[data-page="settings"]').click();await page.locator('#remove-demo').click();await page.locator('#confirm-remove-demo').click();d=await data();assert.equal(d.questions.length,2);assert.equal(d.reviews.length,1);assert.ok(d.questions.every(q=>!q.isDemo));
       assert.deepEqual(errors,[]);report.push({viewport,checks:['导入预览','单选答错阻止推进','单选答对','问答自评','多选','待核对排除','独立计时','个人笔记保留','重复导入','搜索','统计','设置','备份恢复','离线复习','示例移除保留真实数据','无横向溢出','评分按钮首屏可见'],passed:true});

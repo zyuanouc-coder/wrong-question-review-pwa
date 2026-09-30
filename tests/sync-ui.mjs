@@ -5,10 +5,11 @@ const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
 const root=new URL('../',import.meta.url);
 const examples=JSON.parse(await readFile(new URL('data/example-bank.json',root),'utf8'));
 let published={kind:'question-bank',version:1,revision:0,title:'自动更新测试',questions:[]};
+let bankGate=null;
 const server=createServer(async(req,res)=>{
   try{
     const path=new URL(req.url,'http://localhost').pathname;
-    if(path==='/data/question-bank.json'){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(published));return;}
+    if(path==='/data/question-bank.json'){if(bankGate)await bankGate;res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(published));return;}
     const content=await readFile(new URL('.'+(path==='/'?'/index.html':path),root));
     const extension=path.split('.').at(-1);res.writeHead(200,{'Content-Type':({mjs:'text/javascript',js:'text/javascript',css:'text/css',png:'image/png',svg:'image/svg+xml',json:'application/json',webmanifest:'application/manifest+json'})[extension]||'text/html','Cache-Control':'no-store'});res.end(content);
   }catch{res.writeHead(404);res.end();}
@@ -39,5 +40,11 @@ try{
   await page.evaluate(()=>navigator.serviceWorker.ready);await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
   await context.setOffline(true);await page.reload();await page.getByRole('heading',{name:'今天，捡回几个知识点。'}).waitFor();d=await data();assert.equal(d.questions.length,5);assert.equal(d.publishedBank.revision,2);assert.deepEqual(d.progress,before.progress);assert.deepEqual(d.notes,before.notes);
   assert.deepEqual(errors,[]);
+  published={...published,questions:[]};let releaseBank;bankGate=new Promise(resolve=>{releaseBank=resolve;});
+  const checkingContext=await browser.newContext(),checkingPage=await checkingContext.newPage();
+  await checkingPage.goto(`http://127.0.0.1:${server.address().port}/`);
+  await checkingPage.locator('[data-page="bank"]').click();await checkingPage.locator('#update-bank').click();
+  await checkingPage.getByText('正在检查题库更新…',{exact:true}).waitFor();releaseBank();bankGate=null;
+  await checkingPage.getByText('暂未发布真实错题，当前本机题库保留。',{exact:true}).waitFor();await checkingContext.close();
   console.log('通过：自动首批合并、刷新幂等、联网触发、练习中延后更新、旧缓存不回退、离线保留、原进度与笔记不变。');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

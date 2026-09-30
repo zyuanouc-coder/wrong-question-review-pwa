@@ -1,5 +1,5 @@
-const CACHE='wrong-question-review-shell-v1.0.1';
-const SHELL=['./','./index.html','./styles.css?v=1.0.1','./js/app.mjs?v=1.0.1','./js/core.mjs?v=1.0.1','./js/store.mjs?v=1.0.1','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png','./data/question-bank.json','./data/example-bank.json'];
+const CACHE='wrong-question-review-shell-v1.0.2';
+const SHELL=['./','./index.html','./styles.css?v=1.0.2','./js/app.mjs?v=1.0.2','./js/core.mjs?v=1.0.2','./js/store.mjs?v=1.0.2','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png','./data/question-bank.json','./data/example-bank.json'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('wrong-question-review-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{

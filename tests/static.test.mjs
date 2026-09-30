@@ -8,7 +8,7 @@ test('缓存列出的资源均存在，版本化模块统一',async()=>{
   for(const path of paths) await access(new URL(path,root));
   for(const path of ['index.html','js/app.mjs','js/store.mjs']){
     const text=await readFile(new URL(path,root),'utf8');
-    const versions=[...text.matchAll(/\?v=([\d.]+)/g)].map(m=>m[1]);assert.ok(versions.every(v=>v==='1.0.1'));
+    const versions=[...text.matchAll(/\?v=([\d.]+)/g)].map(m=>m[1]);assert.ok(versions.every(v=>v==='1.0.2'));
   }
   assert.match(sw,/startsWith\('wrong-question-review-shell-'\)/);
 });
