@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {SUBJECTS,DAY,INTERVALS,freshData,parseBank,mergeBank,assess,schedule,recordReview,queueFor,validateBackup,escapeHTML} from '../js/core.mjs';
+import {SUBJECTS,DAY,INTERVALS,freshData,parseBank,mergeBank,assess,schedule,recordReview,queueFor,validateBackup,escapeHTML,syncPublishedBank} from '../js/core.mjs';
 import {Store,STORAGE_KEY} from '../js/store.mjs';
 const bank=parseBank(await readFile(new URL('../data/example-bank.json',import.meta.url),'utf8'));
 const initial=()=>mergeBank(freshData(),bank).data;
@@ -78,3 +78,15 @@ test('存储失败不丢失现有内存进度，多个标签页不静默覆盖',
   const old=loaded.data;storage.setItem=()=>{throw new Error('quota');};assert.throws(()=>loaded.save({...old,questions:[]}),/quota/);assert.equal(loaded.data,old);assert.ok(values.get(STORAGE_KEY));
 });
 test('不把题库文本当HTML执行',()=>assert.equal(escapeHTML('<img onerror="bad">'), '&lt;img onerror=&quot;bad&quot;&gt;'));
+test('自动题库更新幂等、拒绝旧批次回退、保留本机进度和私人题',()=>{
+  let d=initial();d=recordReview(d,d.questions[0].id,['B'],'good',4,now);d.notes[d.questions[0].id]='私人笔记';
+  const batch={...bank,revision:1,questions:[{...bank.questions[1],id:'public-001',question:'新的公共题目'}]};
+  const first=syncPublishedBank(d,batch,'hash1',now);assert.equal(first.data.questions.length,4);assert.equal(first.data.reviews.length,1);assert.equal(first.data.notes[d.questions[0].id],'私人笔记');
+  assert.equal(syncPublishedBank(first.data,batch,'hash1').reason,'unchanged');
+  assert.equal(syncPublishedBank(first.data,{...batch,revision:0},'old').reason,'older');
+  assert.throws(()=>syncPublishedBank(first.data,batch,'changed'),/批次编号/);
+  assert.equal(syncPublishedBank(first.data,{...batch,questions:[]},'empty').reason,'empty');
+  const restored=validateBackup({kind:'review-backup',version:1,data:first.data});assert.deepEqual(restored.publishedBank,first.data.publishedBank);
+  const corrected=syncPublishedBank(restored,{...batch,revision:2,questions:[{...d.questions[0],answer:['C']}]},'hash2',now+1000);
+  assert.equal(corrected.data.progress[d.questions[0].id].due,now+1000);assert.equal(corrected.data.notes[d.questions[0].id],'私人笔记');assert.equal(corrected.data.reviews.length,1);
+});

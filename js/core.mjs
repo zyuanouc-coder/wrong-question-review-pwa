@@ -46,7 +46,8 @@ export function parseBank(input) {
   if (raw.questions.length > 20000) throw new Error('单批最多导入 20000 道题');
   const questions=raw.questions.map(normalizeQuestion), ids=new Set();
   for (const q of questions) { if(ids.has(q.id)) throw new Error(`题目编号重复：${q.id}`); ids.add(q.id); }
-  return {version:1,kind:'question-bank',title:string(raw.title)||'导入题库',questions};
+  if(raw.revision!==undefined&&(!Number.isSafeInteger(raw.revision)||raw.revision<0))throw new Error('发布批次 revision 必须是非负整数');
+  return {version:1,kind:'question-bank',revision:raw.revision??0,title:string(raw.title)||'导入题库',questions};
 }
 const contentKey = q => JSON.stringify([q.subject,q.type,q.question,q.options,q.answer]);
 export function mergeBank(data, bank, now=Date.now()) {
@@ -70,6 +71,18 @@ export function mergeBank(data, bank, now=Date.now()) {
     if(q.verification==='pending') counts.pending++;
   }
   return {data:next,counts};
+}
+export function syncPublishedBank(data,bank,signature,now=Date.now()){
+  const previous=data.publishedBank;
+  if(!bank.questions.length)return {data:null,reason:'empty'};
+  if(previous&&bank.revision<previous.revision)return {data:null,reason:'older'};
+  if(previous&&bank.revision===previous.revision){
+    if(signature===previous.signature)return {data:null,reason:'unchanged'};
+    throw new Error('发布题库内容已变更，但批次编号未递增，请修正发布批次。');
+  }
+  const result=mergeBank(data,bank,now);
+  result.data.publishedBank={revision:bank.revision,signature,appliedAt:now,title:bank.title};
+  return {...result,reason:'updated'};
 }
 export function assess(q, response) {
   if(q.type==='问答题') return null;
@@ -125,6 +138,8 @@ export function validateBackup(input) {
   for(const r of d.reviews)if(!r||!ids.has(r.questionId)||!Object.hasOwn(RATINGS,r.rating)||!Number.isFinite(r.time)||!Number.isFinite(r.seconds)||r.seconds<0)throw new Error('备份中的历史记录无效');
   const notes={};
   for(const [id,note] of Object.entries(d.notes||{})){if(!ids.has(id)||typeof note!=='string')throw new Error('备份中的笔记无效');notes[id]=note;}
-  return {...freshData(),questions:bank.questions,progress:structuredClone(d.progress),notes,reviews:structuredClone(d.reviews),settings:normalizeSettings(d.settings)};
+  const result={...freshData(),questions:bank.questions,progress:structuredClone(d.progress),notes,reviews:structuredClone(d.reviews),settings:normalizeSettings(d.settings)};
+  if(d.publishedBank){const p=d.publishedBank;if(!Number.isSafeInteger(p.revision)||p.revision<0||typeof p.signature!=='string'||!Number.isFinite(p.appliedAt))throw new Error('备份中的发布批次无效');result.publishedBank={revision:p.revision,signature:p.signature,appliedAt:p.appliedAt,title:string(p.title)};}
+  return result;
 }
 export function normalizeSettings(raw={}) {return {dailyNew:Math.max(0,Math.min(200,Math.round(Number(raw.dailyNew) || 0))),groupSize:Math.max(1,Math.min(100,Math.round(Number(raw.groupSize)||20))),slowSeconds:Math.max(5,Math.min(600,Math.round(Number(raw.slowSeconds)||60)))};}

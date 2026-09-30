@@ -1,4 +1,4 @@
-import {freshData,validateBackup} from './core.mjs?v=1.0.0';
+import {freshData,validateBackup} from './core.mjs?v=1.0.1';
 export const STORAGE_KEY='wrong-question-review-v1';
 export class Store {
   constructor(storage=globalThis.localStorage){this.storage=storage;this.data=freshData();this.load();}
