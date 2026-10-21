@@ -38,11 +38,25 @@ test('主旨概括三题保留误选、缺项待核对、重复同步不重建�
   const previous={...published,revision:1,questions:[byId.get('verbal-20261021-0001')]};
   let d=syncPublishedBank(freshData(),previous,'old',now).data;
   d.notes[previous.questions[0].id]='原有私人笔记';
-  const merged=syncPublishedBank(d,published,'current',now+1000);
+  const batch={...published,questions:[previous.questions[0],film,privacy,tradition]};
+  const merged=syncPublishedBank(d,batch,'current',now+1000);
   assert.equal(merged.counts.added,3);assert.equal(merged.data.notes[previous.questions[0].id],'原有私人笔记');
-  assert.equal(syncPublishedBank(merged.data,published,'current').reason,'unchanged');
+  assert.equal(syncPublishedBank(merged.data,batch,'current').reason,'unchanged');
   const queue=queueFor(merged.data,'all','','',now);
   assert.ok(!queue.includes(film.id));assert.ok(queue.includes(privacy.id));assert.ok(queue.includes(tradition.id));
+});
+test('星系题完整归档，误选B、正确A，增量同步保留旧题进度与笔记',async()=>{
+  const published=parseBank(await readFile(new URL('../data/question-bank.json',import.meta.url),'utf8'));
+  const q=published.questions.find(q=>q.id==='verbal-20261021-0005');
+  assert.ok(q);assert.equal(q.verification,'verified');assert.equal(q.myWrongAnswer,'B');assert.deepEqual(q.answer,['A']);
+  assert.deepEqual(Object.keys(q.options),['A','B','C','D']);assert.equal(assess(q,['A']),true);assert.equal(assess(q,['B']),false);
+  const oldBank={...published,revision:2,questions:published.questions.filter(item=>item.id!==q.id)};
+  let d=syncPublishedBank(freshData(),oldBank,'old',now).data;
+  const oldId='verbal-20261021-0003';d=recordReview(d,oldId,['B'],'good',5,now);d.notes[oldId]='保留原笔记';
+  const updated=syncPublishedBank(d,published,'new',now+1000);
+  assert.equal(updated.counts.added,1);assert.deepEqual(updated.data.progress,d.progress);assert.deepEqual(updated.data.notes,d.notes);assert.deepEqual(updated.data.reviews,d.reviews);
+  assert.ok(queueFor(updated.data,'new','','',now).includes(q.id));
+  assert.equal(syncPublishedBank(updated.data,published,'new').reason,'unchanged');
 });
 test('单选、多选和问答的判定边界',()=>{
   const q=bank.questions[0];assert.equal(assess(q,['B']),true);assert.equal(assess(q,[]),false);assert.equal(assess(q,['A']),false);
