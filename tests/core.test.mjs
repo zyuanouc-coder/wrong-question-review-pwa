@@ -58,6 +58,20 @@ test('星系题完整归档，误选B、正确A，增量同步保留旧题进度
   assert.ok(queueFor(updated.data,'new','','',now).includes(q.id));
   assert.equal(syncPublishedBank(updated.data,published,'new').reason,'unchanged');
 });
+test('全球治理题归入意图判断，正确C误选D，发布更新保留原复习记录',async()=>{
+  const published=parseBank(await readFile(new URL('../data/question-bank.json',import.meta.url),'utf8'));
+  const q=published.questions.find(q=>q.id==='verbal-20261021-0006');
+  assert.ok(q);assert.equal(q.category,'意图判断');assert.equal(q.verification,'verified');
+  assert.deepEqual(q.answer,['C']);assert.equal(q.myWrongAnswer,'D');assert.deepEqual(Object.keys(q.options),['A','B','C','D']);
+  assert.equal(assess(q,['C']),true);assert.equal(assess(q,['D']),false);
+  const previous={...published,revision:published.revision-1,questions:published.questions.filter(item=>item.id!==q.id)};
+  let d=syncPublishedBank(freshData(),previous,'before',now).data;
+  d=recordReview(d,'verbal-20261021-0005',['A'],'good',7,now);d.notes['verbal-20261021-0005']='保留旧题私人笔记';
+  const result=syncPublishedBank(d,published,'after',now+1000);
+  assert.equal(result.counts.added,1);assert.deepEqual(result.data.progress,d.progress);assert.deepEqual(result.data.notes,d.notes);assert.deepEqual(result.data.reviews,d.reviews);
+  assert.ok(queueFor(result.data,'new','言语理解','意图判断',now).includes(q.id));
+  assert.equal(syncPublishedBank(result.data,published,'after').reason,'unchanged');
+});
 test('单选、多选和问答的判定边界',()=>{
   const q=bank.questions[0];assert.equal(assess(q,['B']),true);assert.equal(assess(q,[]),false);assert.equal(assess(q,['A']),false);
   const multi={...q,type:'多选题',answer:['A','C']};assert.equal(assess(multi,['C','A']),true);assert.equal(assess(multi,['A']),false);assert.equal(assess(multi,['A','B','C']),false);
