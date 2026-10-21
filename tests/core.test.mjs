@@ -26,6 +26,24 @@ test('导入严格验证，错误文件不会部分修改已有题库',()=>{
   assert.throws(()=>parseBank({questions:[]}),/question-bank/);
   assert.equal(freshData().questions.length,0);
 });
+test('主旨概括三题保留误选、缺项待核对、重复同步不重建，已有私人笔记不变',async()=>{
+  const published=parseBank(await readFile(new URL('../data/question-bank.json',import.meta.url),'utf8'));
+  const byId=new Map(published.questions.map(q=>[q.id,q]));
+  const film=byId.get('verbal-20261021-0002'),privacy=byId.get('verbal-20261021-0003'),tradition=byId.get('verbal-20261021-0004');
+  assert.deepEqual([film.myWrongAnswer,privacy.myWrongAnswer,tradition.myWrongAnswer],['C','A','C']);
+  assert.deepEqual([film.answer,privacy.answer,tradition.answer],[['B'],['B'],['D']]);
+  assert.equal(film.verification,'pending');assert.equal(film.options.D,undefined);
+  assert.equal(privacy.verification,'verified');assert.equal(tradition.verification,'verified');
+  assert.match(tradition.explanation,/造就.*更强/);
+  const previous={...published,revision:1,questions:[byId.get('verbal-20261021-0001')]};
+  let d=syncPublishedBank(freshData(),previous,'old',now).data;
+  d.notes[previous.questions[0].id]='原有私人笔记';
+  const merged=syncPublishedBank(d,published,'current',now+1000);
+  assert.equal(merged.counts.added,3);assert.equal(merged.data.notes[previous.questions[0].id],'原有私人笔记');
+  assert.equal(syncPublishedBank(merged.data,published,'current').reason,'unchanged');
+  const queue=queueFor(merged.data,'all','','',now);
+  assert.ok(!queue.includes(film.id));assert.ok(queue.includes(privacy.id));assert.ok(queue.includes(tradition.id));
+});
 test('单选、多选和问答的判定边界',()=>{
   const q=bank.questions[0];assert.equal(assess(q,['B']),true);assert.equal(assess(q,[]),false);assert.equal(assess(q,['A']),false);
   const multi={...q,type:'多选题',answer:['A','C']};assert.equal(assess(multi,['C','A']),true);assert.equal(assess(multi,['A']),false);assert.equal(assess(multi,['A','B','C']),false);
