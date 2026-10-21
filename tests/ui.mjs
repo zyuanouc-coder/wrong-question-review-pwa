@@ -1,10 +1,26 @@
 import assert from 'node:assert/strict';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
+import {createServer} from 'node:http';
 const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
 const root=new URL('../',import.meta.url),out=new URL('../test-results/',import.meta.url);
 await mkdir(out,{recursive:true});
-const url=process.env.QA_URL||'http://127.0.0.1:4180/';
+// Serve the empty fixture at the HTTP layer so service-worker requests are isolated too.
+const server=createServer(async(req,res)=>{
+  try{
+    const path=new URL(req.url,'http://localhost').pathname;
+    if(path==='/data/question-bank.json'){
+      res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
+      res.end(JSON.stringify({kind:'question-bank',version:1,revision:0,title:'测试空题库',questions:[]}));return;
+    }
+    const content=await readFile(new URL('.'+(path==='/'?'/index.html':path),root));
+    const extension=path.split('.').at(-1);
+    res.writeHead(200,{'Content-Type':({mjs:'text/javascript',js:'text/javascript',css:'text/css',png:'image/png',svg:'image/svg+xml',json:'application/json',webmanifest:'application/manifest+json'})[extension]||'text/html'});
+    res.end(content);
+  }catch{res.writeHead(404);res.end();}
+});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const url=`http://127.0.0.1:${server.address().port}/`;
 const browser=await chromium.launch({channel:'chrome',headless:true});
 const report=[];
 try{
@@ -49,5 +65,5 @@ try{
       assert.deepEqual(errors,[]);report.push({viewport,checks:['导入预览','单选答错阻止推进','单选答对','问答自评','多选','待核对排除','独立计时','个人笔记保留','重复导入','搜索','统计','设置','备份恢复','离线复习','示例移除保留真实数据','无横向溢出','评分按钮首屏可见'],passed:true});
     }catch(err){await shot('FAIL');throw err;}finally{await context.close();}
   }
-}finally{await browser.close();await writeFile(new URL('ui-report.json',out),JSON.stringify(report,null,2));}
+}finally{await browser.close();await new Promise(resolve=>server.close(resolve));await writeFile(new URL('ui-report.json',out),JSON.stringify(report,null,2));}
 console.log(JSON.stringify(report,null,2));

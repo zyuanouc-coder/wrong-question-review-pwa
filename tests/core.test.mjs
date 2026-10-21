@@ -6,10 +6,17 @@ import {Store,STORAGE_KEY} from '../js/store.mjs';
 const bank=parseBank(await readFile(new URL('../data/example-bank.json',import.meta.url),'utf8'));
 const initial=()=>mergeBank(freshData(),bank).data;
 const now=new Date('2026-09-30T12:00:00+08:00').getTime();
-test('七科与明确的示例库，正式库为空',async()=>{
+test('七科与明确的示例库，正式库格式有效且不混入示例',async()=>{
   assert.equal(SUBJECTS.length,7);assert.ok(SUBJECTS.includes('公基'));
   assert.equal(bank.questions.length,3);assert.ok(bank.questions.every(q=>q.isDemo));
-  assert.equal(parseBank(await readFile(new URL('../data/question-bank.json',import.meta.url),'utf8')).questions.length,0);
+  const published=parseBank(await readFile(new URL('../data/question-bank.json',import.meta.url),'utf8'));
+  assert.ok(Number.isInteger(published.revision)&&published.revision>=1);
+  assert.ok(published.questions.every(q=>!q.isDemo&&!q.id.startsWith('demo-')));
+  const incomplete=published.questions.find(q=>q.id==='verbal-20261021-0001');
+  assert.ok(incomplete);assert.deepEqual(incomplete.answer,['B']);assert.equal(incomplete.myWrongAnswer,'C');
+  assert.equal(incomplete.verification,'pending');assert.equal(incomplete.options.D,undefined);
+  const d=mergeBank(freshData(),published).data;
+  assert.ok(!queueFor(d,'all','','',now).includes(incomplete.id));
 });
 test('导入严格验证，错误文件不会部分修改已有题库',()=>{
   for(const changes of [{subject:'未知'},{answer:['H']},{explanation:''},{id:'__proto__'},{options:{A:'仅一个'}}]){
